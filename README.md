@@ -28,7 +28,7 @@ Comprehensive query examples for analyzing Polymarket data using The Graph Proto
 - **Network**: Polygon
 - **Query Examples**: [queries/polymarket-open-interest.md](queries/polymarket-open-interest.md)
 
-### 5. Polymarket Order Filled Events
+### 5. Polymarket Order Filled Events - [Subgraph](https://thegraph.com/explorer/subgraphs/EZCTgSzLPuBSqQcuR3ifeiKHKBnpjHSNbYpty8Mnjm9D?view=Query&chain=arbitrum-one)
 - **Subgraph ID**: `Qma5ngHGmgW8qea4nEXmFjNtJb9aXDwV75hWekpTKD1fYf`
 - **Purpose**: Order fills, redemptions, and exchange events
 - **Network**: Polygon
