@@ -39,7 +39,7 @@ Comprehensive query examples for analyzing Polymarket data using The Graph Proto
 1. Choose the appropriate subgraph for your analysis needs
 2. Browse the query examples in the `queries/` directory
 3. Modify queries for your specific use case
-4. Execute queries using The Graph's hosted service or decentralized network
+4. Execute queries using The Graph's decentralized network
 
 ## Query Execution
 
