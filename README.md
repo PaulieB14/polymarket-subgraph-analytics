@@ -49,6 +49,156 @@ You can execute these queries using:
 - HTTP requests to subgraph endpoints
 - Programming languages with GraphQL support
 
+## Dashboard Integration
+
+### Data Transformation for Human-Readable Display
+
+#### Market Card Example
+```javascript
+// Transform raw GraphQL data to display format
+function formatMarketData(rawMarket) {
+  return {
+    id: rawMarket.id,
+    volume: formatCurrency(rawMarket.scaledCollateralVolume),
+    probability: formatProbability(rawMarket.outcomeTokenPrices),
+    trades: rawMarket.tradesQuantity,
+    status: getMarketStatus(rawMarket),
+    // Note: Market title/question requires additional API call to Polymarket
+    title: "Loading..." // Fetch from Polymarket API using condition ID
+  };
+}
+
+// Helper functions
+function formatCurrency(scaledAmount) {
+  return `$${(scaledAmount / 1e6).toLocaleString()}`;
+}
+
+function formatProbability(prices) {
+  if (!prices || prices.length === 0) return "N/A";
+  const yesPrice = parseFloat(prices[0]);
+  return `${(yesPrice * 100).toFixed(1)}%`;
+}
+
+function getMarketStatus(market) {
+  if (market.resolutionTimestamp) return "Resolved";
+  if (market.lastActiveDay > Date.now() / 1000 - 86400) return "Active";
+  return "Inactive";
+}
+```
+
+#### User Profile Display
+```javascript
+function formatUserProfile(rawUser) {
+  return {
+    address: rawUser.id,
+    totalVolume: formatCurrency(rawUser.scaledCollateralVolume),
+    profit: formatProfit(rawUser.scaledProfit),
+    trades: rawUser.numTrades,
+    winRate: calculateWinRate(rawUser.marketPositions)
+  };
+}
+
+function formatProfit(scaledProfit) {
+  const profit = scaledProfit / 1e6;
+  const sign = profit >= 0 ? "+" : "";
+  return `${sign}$${profit.toLocaleString()}`;
+}
+```
+
+#### Trading Activity Feed
+```javascript
+function formatTransaction(rawTransaction) {
+  return {
+    type: rawTransaction.type === "Buy" ? "🟢 Buy" : "🔴 Sell",
+    amount: formatCurrency(rawTransaction.tradeAmount),
+    timestamp: new Date(rawTransaction.timestamp * 1000).toLocaleString(),
+    user: `${rawTransaction.user.id.slice(0, 6)}...${rawTransaction.user.id.slice(-4)}`,
+    outcome: rawTransaction.outcomeIndex === 0 ? "Yes" : "No"
+  };
+}
+```
+
+### Getting Market Metadata
+
+Since subgraphs only contain technical IDs, you'll need market titles from Polymarket's API:
+
+```javascript
+// Fetch market question/title using condition ID
+async function getMarketTitle(conditionId) {
+  try {
+    const response = await fetch(`https://gamma-api.polymarket.com/events?archived=false&closed=false&order=volume24hr&ascending=false`);
+    const events = await response.json();
+    
+    // Find event containing this condition
+    const event = events.find(e => 
+      e.markets.some(m => m.conditionId === conditionId)
+    );
+    
+    return event ? event.title : "Unknown Market";
+  } catch (error) {
+    return "Error loading title";
+  }
+}
+```
+
+### Sample Dashboard Components
+
+#### Market Card (React)
+```jsx
+function MarketCard({ market }) {
+  const [title, setTitle] = useState("Loading...");
+  
+  useEffect(() => {
+    getMarketTitle(market.conditions[0]).then(setTitle);
+  }, [market.conditions]);
+  
+  return (
+    <div className="market-card">
+      <h3>{title}</h3>
+      <div className="market-stats">
+        <span>Volume: {formatCurrency(market.scaledCollateralVolume)}</span>
+        <span>Probability: {formatProbability(market.outcomeTokenPrices)}</span>
+        <span>Trades: {market.tradesQuantity}</span>
+      </div>
+    </div>
+  );
+}
+```
+
+#### Live Activity Feed
+```jsx
+function ActivityFeed() {
+  const [transactions, setTransactions] = useState([]);
+  
+  // Poll for new transactions every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(fetchRecentTransactions, 30000);
+    return () => clearInterval(interval);
+  }, []);
+  
+  return (
+    <div className="activity-feed">
+      <h2>Recent Activity</h2>
+      {transactions.map(tx => (
+        <div key={tx.id} className="transaction-item">
+          <span>{tx.type}</span>
+          <span>{tx.amount}</span>
+          <span>{tx.timestamp}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### Key Tips
+
+- **Cache market metadata** - Don't fetch titles on every render
+- **Use websockets** for real-time updates when possible
+- **Format large numbers** - Use `toLocaleString()` for readability  
+- **Handle loading states** - Subgraph data loads fast, but market metadata takes longer
+- **Batch API calls** - Group condition ID lookups to avoid rate limits
+
 ## Contributing
 
 Feel free to add more query examples or improve existing ones by submitting a pull request.
