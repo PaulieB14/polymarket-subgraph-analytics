@@ -34,6 +34,18 @@ Comprehensive query examples for analyzing Polymarket data using The Graph Proto
 - **Network**: Polygon
 - **Query Examples**: [queries/polymarket-order-filled.md](queries/polymarket-order-filled.md)
 
+### 6. Polymarket Names - [Subgraph](https://thegraph.com/explorer/subgraphs/22CoTbEtpv6fURB6moTNfJPWNUPXtiFGRA8h1zajMha3?view=Curators&chain=arbitrum-one) 🆕
+- **Subgraph ID**: `22CoTbEtpv6fURB6moTNfJPWNUPXtiFGRA8h1zajMha3`
+- **IPFS Hash**: `QmP6hMoYTYx4dFGs2dYiNnUDsRZ4ybhH9N6C6G19tHQxku`
+- **Purpose**: **Human-readable market titles and questions** - Provides the missing link between questionIDs and actual market descriptions
+- **Network**: Arbitrum One
+- **Key Features**:
+  - Market questions in plain English
+  - Question initialization and resolution tracking
+  - Links questionIDs from other subgraphs to readable titles
+  - Real-time market metadata updates
+- **Query Examples**: [queries/polymarket-names.md](queries/polymarket-names.md)
+
 ## Quick Start
 
 1. Choose the appropriate subgraph for your analysis needs
@@ -51,24 +63,57 @@ You can execute these queries using:
 
 ## Dashboard Integration
 
-### Data Transformation for Human-Readable Display
+### Enhanced Data Transformation with Human-Readable Names
 
-#### Market Card Example
+**NEW**: With the Polymarket Names subgraph, you can now easily get human-readable market titles without external API calls!
+
+#### Market Card Example (Enhanced)
 ```javascript
-// Transform raw GraphQL data to display format
-function formatMarketData(rawMarket) {
+// Enhanced market data transformation with readable names
+function formatMarketDataWithNames(rawMarket, marketNames) {
+  // Find matching market name from Names subgraph
+  const marketName = marketNames.find(m => 
+    m.questionID.toLowerCase() === rawMarket.conditions[0].toLowerCase()
+  );
+  
   return {
     id: rawMarket.id,
     volume: formatCurrency(rawMarket.scaledCollateralVolume),
     probability: formatProbability(rawMarket.outcomeTokenPrices),
     trades: rawMarket.tradesQuantity,
     status: getMarketStatus(rawMarket),
-    // Note: Market title/question requires additional API call to Polymarket
-    title: "Loading..." // Fetch from Polymarket API using condition ID
+    // Now we have the actual market question!
+    title: marketName?.question || "Market title not found",
+    questionID: rawMarket.conditions[0]
   };
 }
 
-// Helper functions
+// Combined query to get markets with names
+const combinedMarketQuery = `
+  query GetMarketsWithNames {
+    # From Polymarket Main subgraph
+    fixedProductMarketMakers(first: 10, orderBy: scaledCollateralVolume, orderDirection: desc) {
+      id
+      conditions
+      scaledCollateralVolume
+      outcomeTokenPrices
+      tradesQuantity
+    }
+  }
+`;
+
+const namesQuery = `
+  query GetMarketNames($questionIDs: [Bytes!]) {
+    markets(where: { questionID_in: $questionIDs }) {
+      questionID
+      question
+      creator
+      timestamp
+    }
+  }
+`;
+
+// Helper functions remain the same
 function formatCurrency(scaledAmount) {
   return `$${(scaledAmount / 1e6).toLocaleString()}`;
 }
@@ -86,118 +131,198 @@ function getMarketStatus(market) {
 }
 ```
 
-#### User Profile Display
+#### Cross-Subgraph Market Analytics
 ```javascript
-function formatUserProfile(rawUser) {
-  return {
-    address: rawUser.id,
-    totalVolume: formatCurrency(rawUser.scaledCollateralVolume),
-    profit: formatProfit(rawUser.scaledProfit),
-    trades: rawUser.numTrades,
-    winRate: calculateWinRate(rawUser.marketPositions)
-  };
-}
-
-function formatProfit(scaledProfit) {
-  const profit = scaledProfit / 1e6;
-  const sign = profit >= 0 ? "+" : "";
-  return `${sign}$${profit.toLocaleString()}`;
-}
-```
-
-#### Trading Activity Feed
-```javascript
-function formatTransaction(rawTransaction) {
-  return {
-    type: rawTransaction.type === "Buy" ? "🟢 Buy" : "🔴 Sell",
-    amount: formatCurrency(rawTransaction.tradeAmount),
-    timestamp: new Date(rawTransaction.timestamp * 1000).toLocaleString(),
-    user: `${rawTransaction.user.id.slice(0, 6)}...${rawTransaction.user.id.slice(-4)}`,
-    outcome: rawTransaction.outcomeIndex === 0 ? "Yes" : "No"
-  };
-}
-```
-
-### Getting Market Metadata
-
-Since subgraphs only contain technical IDs, you'll need market titles from Polymarket's API:
-
-```javascript
-// Fetch market question/title using condition ID
-async function getMarketTitle(conditionId) {
-  try {
-    const response = await fetch(`https://gamma-api.polymarket.com/events?archived=false&closed=false&order=volume24hr&ascending=false`);
-    const events = await response.json();
-    
-    // Find event containing this condition
-    const event = events.find(e => 
-      e.markets.some(m => m.conditionId === conditionId)
+// Example: Get top markets with full details including names
+async function getTopMarketsWithDetails() {
+  // 1. Get market data from main subgraph
+  const marketsData = await querySubgraph(POLYMARKET_MAIN_SUBGRAPH, `
+    query {
+      fixedProductMarketMakers(first: 20, orderBy: scaledCollateralVolume, orderDirection: desc) {
+        id
+        conditions
+        scaledCollateralVolume
+        outcomeTokenPrices
+        tradesQuantity
+        lastActiveDay
+      }
+    }
+  `);
+  
+  // 2. Extract questionIDs
+  const questionIDs = marketsData.fixedProductMarketMakers
+    .map(market => market.conditions[0]);
+  
+  // 3. Get human-readable names from Names subgraph
+  const namesData = await querySubgraph(POLYMARKET_NAMES_SUBGRAPH, `
+    query($questionIDs: [Bytes!]) {
+      markets(where: { questionID_in: $questionIDs }) {
+        questionID
+        question
+        creator
+        timestamp
+      }
+    }
+  `, { questionIDs });
+  
+  // 4. Combine the data
+  return marketsData.fixedProductMarketMakers.map(market => {
+    const nameInfo = namesData.markets.find(n => 
+      n.questionID.toLowerCase() === market.conditions[0].toLowerCase()
     );
     
-    return event ? event.title : "Unknown Market";
-  } catch (error) {
-    return "Error loading title";
-  }
+    return {
+      ...market,
+      question: nameInfo?.question || "Unknown Market",
+      creator: nameInfo?.creator,
+      createdAt: nameInfo?.timestamp
+    };
+  });
 }
 ```
 
-### Sample Dashboard Components
-
-#### Market Card (React)
-```jsx
-function MarketCard({ market }) {
-  const [title, setTitle] = useState("Loading...");
+### Real-time Market Monitoring Dashboard
+```javascript
+// Example: Real-time dashboard with live market names
+function MarketDashboard() {
+  const [markets, setMarkets] = useState([]);
+  const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    getMarketTitle(market.conditions[0]).then(setTitle);
-  }, [market.conditions]);
+    async function loadMarkets() {
+      try {
+        const marketsWithNames = await getTopMarketsWithDetails();
+        setMarkets(marketsWithNames);
+      } catch (error) {
+        console.error('Failed to load markets:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    loadMarkets();
+    
+    // Refresh every 5 minutes
+    const interval = setInterval(loadMarkets, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+  
+  if (loading) return <div>Loading markets...</div>;
   
   return (
-    <div className="market-card">
-      <h3>{title}</h3>
-      <div className="market-stats">
-        <span>Volume: {formatCurrency(market.scaledCollateralVolume)}</span>
-        <span>Probability: {formatProbability(market.outcomeTokenPrices)}</span>
-        <span>Trades: {market.tradesQuantity}</span>
+    <div className="market-dashboard">
+      <h1>Top Polymarket Markets</h1>
+      <div className="market-grid">
+        {markets.map(market => (
+          <div key={market.id} className="market-card">
+            <h3>{market.question}</h3>
+            <div className="market-stats">
+              <span>Volume: {formatCurrency(market.scaledCollateralVolume)}</span>
+              <span>Probability: {formatProbability(market.outcomeTokenPrices)}</span>
+              <span>Trades: {market.tradesQuantity}</span>
+            </div>
+            <div className="market-meta">
+              <small>Created: {new Date(market.createdAt * 1000).toLocaleDateString()}</small>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 ```
 
-#### Live Activity Feed
-```jsx
-function ActivityFeed() {
-  const [transactions, setTransactions] = useState([]);
+### Multi-Subgraph Analytics Queries
+```javascript
+// Example: Comprehensive market analysis using multiple subgraphs
+async function getCompleteMarketAnalysis(questionID) {
+  const [marketDetails, pnlData, activityData, openInterest, marketName] = await Promise.all([
+    // Main market data
+    querySubgraph(POLYMARKET_MAIN_SUBGRAPH, `
+      query($condition: Bytes!) {
+        fixedProductMarketMakers(where: { conditions_contains: [$condition] }) {
+          id
+          scaledCollateralVolume
+          outcomeTokenPrices
+          tradesQuantity
+        }
+      }
+    `, { condition: questionID }),
+    
+    // PnL data
+    querySubgraph(POLYMARKET_PNL_SUBGRAPH, `
+      query($condition: Bytes!) {
+        marketPositions(where: { market_: { conditions_contains: [$condition] } }) {
+          user { id }
+          realizedProfit
+          netQuantity
+        }
+      }
+    `, { condition: questionID }),
+    
+    // Activity data  
+    querySubgraph(POLYMARKET_ACTIVITY_SUBGRAPH, `
+      query($condition: Bytes!) {
+        splitPositions(where: { condition: $condition }, first: 100, orderBy: timestamp, orderDirection: desc) {
+          user
+          amount
+          timestamp
+        }
+      }
+    `, { condition: questionID }),
+    
+    // Open interest
+    querySubgraph(POLYMARKET_OPEN_INTEREST_SUBGRAPH, `
+      query($condition: Bytes!) {
+        marketDayData(where: { market_: { conditions_contains: [$condition] } }, orderBy: date, orderDirection: desc, first: 30) {
+          date
+          volume
+          openInterest
+        }
+      }
+    `, { condition: questionID }),
+    
+    // Human-readable name
+    querySubgraph(POLYMARKET_NAMES_SUBGRAPH, `
+      query($questionID: Bytes!) {
+        markets(where: { questionID: $questionID }) {
+          question
+          creator
+          timestamp
+        }
+      }
+    `, { questionID })
+  ]);
   
-  // Poll for new transactions every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(fetchRecentTransactions, 30000);
-    return () => clearInterval(interval);
-  }, []);
-  
-  return (
-    <div className="activity-feed">
-      <h2>Recent Activity</h2>
-      {transactions.map(tx => (
-        <div key={tx.id} className="transaction-item">
-          <span>{tx.type}</span>
-          <span>{tx.amount}</span>
-          <span>{tx.timestamp}</span>
-        </div>
-      ))}
-    </div>
-  );
+  return {
+    question: marketName.markets[0]?.question || "Unknown Market",
+    marketDetails: marketDetails.fixedProductMarketMakers[0],
+    topTraders: pnlData.marketPositions
+      .sort((a, b) => parseFloat(b.realizedProfit) - parseFloat(a.realizedProfit))
+      .slice(0, 10),
+    recentActivity: activityData.splitPositions,
+    volumeHistory: openInterest.marketDayData,
+    creator: marketName.markets[0]?.creator,
+    createdAt: marketName.markets[0]?.timestamp
+  };
 }
 ```
 
-### Key Tips
+### Key Benefits of the Names Subgraph Integration
 
-- **Cache market metadata** - Don't fetch titles on every render
-- **Use websockets** for real-time updates when possible
-- **Format large numbers** - Use `toLocaleString()` for readability  
-- **Handle loading states** - Subgraph data loads fast, but market metadata takes longer
-- **Batch API calls** - Group condition ID lookups to avoid rate limits
+- **No External API Dependencies**: Get market titles directly from The Graph
+- **Real-time Updates**: Market names are indexed as they're created
+- **Cross-subgraph Linking**: Use questionIDs to connect data across all Polymarket subgraphs
+- **Enhanced User Experience**: Display actual market questions instead of cryptic IDs
+- **Reduced Complexity**: Single GraphQL query instead of multiple API calls
+
+### Tips for Using Multiple Subgraphs
+
+- **Batch Queries**: Use GraphQL variables to query multiple markets at once
+- **Cache Strategically**: Market names don't change once created, so cache them aggressively
+- **Handle Missing Data**: Not all questionIDs may be present in the Names subgraph
+- **Use Promise.all()**: Query multiple subgraphs in parallel for better performance
+- **Error Handling**: Implement fallbacks when subgraphs are temporarily unavailable
 
 ## Contributing
 
@@ -208,3 +333,4 @@ Feel free to add more query examples or improve existing ones by submitting a pu
 - [The Graph Documentation](https://thegraph.com/docs/)
 - [GraphQL Documentation](https://graphql.org/learn/)
 - [Polymarket Documentation](https://docs.polymarket.com/)
+- [Polymarket Names Subgraph](https://thegraph.com/explorer/subgraphs/22CoTbEtpv6fURB6moTNfJPWNUPXtiFGRA8h1zajMha3?view=Curators&chain=arbitrum-one)
