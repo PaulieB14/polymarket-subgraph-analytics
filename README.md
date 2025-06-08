@@ -38,7 +38,7 @@ Comprehensive query examples for analyzing Polymarket data using The Graph Proto
 - **Subgraph ID**: `22CoTbEtpv6fURB6moTNfJPWNUPXtiFGRA8h1zajMha3`
 - **IPFS Hash**: `QmP6hMoYTYx4dFGs2dYiNnUDsRZ4ybhH9N6C6G19tHQxku`
 - **Purpose**: **Human-readable market titles and questions** - Provides the missing link between questionIDs and actual market descriptions
-- **Network**: Arbitrum One
+- **Network**: Polygon
 - **Key Features**:
   - Market questions in plain English
   - Question initialization and resolution tracking
