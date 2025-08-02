@@ -1,7 +1,6 @@
-# Polymarket Orderbook & Market Microstructure Subgraph Queries
+# Polymarket Orderbook Subgraph Queries
 
 **Repository**: [Polymarket-Orders](https://github.com/PaulieB14/Polymarket-Orders)  
-**Graph Studio**: [Graph Studio Link](https://api.studio.thegraph.com/query/111767/polymarket-orderbook/version/latest)
 
 ## Core Market Data
 
