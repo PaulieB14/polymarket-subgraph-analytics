@@ -11,7 +11,7 @@ Comprehensive query examples for analyzing Polymarket data using The Graph Proto
 - **Query Examples**: [queries/polymarket-main.md](queries/polymarket-main.md)
 
 ### 2. Polymarket Profit and Loss - [Subgraph](https://thegraph.com/explorer/subgraphs/6c58N5U4MtQE2Y8njfVrrAfRykzfqajMGeTMEvMmskVz?view=Query&chain=arbitrum-one)
-- **Subgraph ID**: `QmZAYiMeZiWC7ZjdWepek7hy1jbcW3ngimBF9ibTiTtwQU`
+- **Subgraph ID**: `QmZAYiMeZiWC7ZjdWepek7hy1jbcW3ngimBF9kpvhYeG4QX8a`
 - **Purpose**: User positions, PnL tracking, and realized profits/losses
 - **Network**: Polygon
 - **Query Examples**: [queries/polymarket-pnl.md](queries/polymarket-pnl.md)
@@ -28,13 +28,21 @@ Comprehensive query examples for analyzing Polymarket data using The Graph Proto
 - **Network**: Polygon
 - **Query Examples**: [queries/polymarket-open-interest.md](queries/polymarket-open-interest.md)
 
-### 5. Polymarket Order Filled Events - [Subgraph](https://thegraph.com/explorer/subgraphs/EZCTgSzLPuBSqQcuR3ifeiKHKBnpjHSNbYpty8Mnjm9D?view=Query&chain=arbitrum-one)
-- **Subgraph ID**: `Qma5ngHGmgW8qea4nEXmFjNtJb9aXDwV75hWekpTKD1fYf`
-- **Purpose**: Order fills, redemptions, and exchange events
+### 5. Polymarket Orderbook & Market Microstructure 🆕
+- **Repository**: [Polymarket-Orders](https://github.com/PaulieB14/Polymarket-Orders)
+- **Graph Studio**: [Graph Studio Link](https://api.studio.thegraph.com/query/111767/polymarket-orderbook/version/latest)
+- **Purpose**: **Advanced orderbook analytics and market microstructure data** - Real-time orderbook depth, bid-ask spreads, liquidity analysis, and trading flow metrics
 - **Network**: Polygon
-- **Query Examples**: [queries/polymarket-order-filled.md](queries/polymarket-order-filled.md)
+- **Key Features**:
+  - Real-time orderbook state and depth tracking
+  - Market microstructure metrics (spreads, liquidity, order flow)
+  - Trading activity analysis with price impact metrics
+  - Multi-level market depth visualization
+  - Order execution and cancellation tracking
+  - Buy/sell flow imbalance detection
+- **Query Examples**: [queries/polymarket-orderbook.md](queries/polymarket-orderbook.md)
 
-### 6. Polymarket Names - [Subgraph](https://thegraph.com/explorer/subgraphs/22CoTbEtpv6fURB6moTNfJPWNUPXtiFGRA8h1zajMha3?view=Curators&chain=arbitrum-one) 🆕
+### 6. Polymarket Names - [Subgraph](https://thegraph.com/explorer/subgraphs/22CoTbEtpv6fURB6moTNfJPWNUPXtiFGRA8h1zajMha3?view=Curators&chain=arbitrum-one)
 - **Subgraph ID**: `22CoTbEtpv6fURB6moTNfJPWNUPXtiFGRA8h1zajMha3`
 - **IPFS Hash**: `QmP6hMoYTYx4dFGs2dYiNnUDsRZ4ybhH9N6C6G19tHQxku`
 - **Purpose**: **Human-readable market titles and questions** - Provides the missing link between questionIDs and actual market descriptions
@@ -63,17 +71,22 @@ You can execute these queries using:
 
 ## Dashboard Integration
 
-### Enhanced Data Transformation with Human-Readable Names
+### Enhanced Data Transformation with Human-Readable Names and Orderbook Data
 
-**NEW**: With the Polymarket Names subgraph, you can now easily get human-readable market titles without external API calls!
+**NEW**: With the Polymarket Names subgraph and the advanced Orderbook & Market Microstructure subgraph, you can now build comprehensive trading dashboards with human-readable market titles and real-time market depth data!
 
-#### Market Card Example (Enhanced)
+#### Advanced Market Card with Orderbook Data
 ```javascript
-// Enhanced market data transformation with readable names
-function formatMarketDataWithNames(rawMarket, marketNames) {
+// Enhanced market data transformation with names and orderbook depth
+function formatAdvancedMarketData(rawMarket, marketNames, orderbookData) {
   // Find matching market name from Names subgraph
   const marketName = marketNames.find(m => 
     m.questionID.toLowerCase() === rawMarket.conditions[0].toLowerCase()
+  );
+  
+  // Find matching orderbook data
+  const orderbook = orderbookData.find(ob => 
+    ob.marketId === rawMarket.conditions[0]
   );
   
   return {
@@ -82,15 +95,20 @@ function formatMarketDataWithNames(rawMarket, marketNames) {
     probability: formatProbability(rawMarket.outcomeTokenPrices),
     trades: rawMarket.tradesQuantity,
     status: getMarketStatus(rawMarket),
-    // Now we have the actual market question!
     title: marketName?.question || "Market title not found",
-    questionID: rawMarket.conditions[0]
+    questionID: rawMarket.conditions[0],
+    // New orderbook metrics
+    spread: orderbook?.currentSpread || "N/A",
+    spreadPercentage: orderbook?.currentSpreadPercentage || "N/A",
+    bidDepth: orderbook?.totalBidDepth || "0",
+    askDepth: orderbook?.totalAskDepth || "0",
+    lastTradePrice: orderbook?.lastTradePrice || "N/A"
   };
 }
 
-// Combined query to get markets with names
-const combinedMarketQuery = `
-  query GetMarketsWithNames {
+// Multi-subgraph query for comprehensive market data
+const comprehensiveMarketQuery = `
+  query GetCompleteMarketData {
     # From Polymarket Main subgraph
     fixedProductMarketMakers(first: 10, orderBy: scaledCollateralVolume, orderDirection: desc) {
       id
@@ -98,6 +116,38 @@ const combinedMarketQuery = `
       scaledCollateralVolume
       outcomeTokenPrices
       tradesQuantity
+    }
+  }
+`;
+
+const orderbookQuery = `
+  query GetOrderbookData($marketIds: [String!]) {
+    orderBooks(where: { marketId_in: $marketIds }) {
+      id
+      marketId
+      totalBidDepth
+      totalAskDepth
+      bidDepthLevels
+      askDepthLevels
+      lastUpdate
+    }
+    spreads(where: { marketId_in: $marketIds }) {
+      id
+      marketId
+      currentSpread
+      currentSpreadPercentage
+      avgSpread
+      lastUpdate
+    }
+    orderFills(
+      where: { marketId_in: $marketIds }
+      orderBy: timestamp
+      orderDirection: desc
+      first: 1
+    ) {
+      marketId
+      price
+      timestamp
     }
   }
 `;
@@ -112,217 +162,25 @@ const namesQuery = `
     }
   }
 `;
-
-// Helper functions remain the same
-function formatCurrency(scaledAmount) {
-  return `$${(scaledAmount / 1e6).toLocaleString()}`;
-}
-
-function formatProbability(prices) {
-  if (!prices || prices.length === 0) return "N/A";
-  const yesPrice = parseFloat(prices[0]);
-  return `${(yesPrice * 100).toFixed(1)}%`;
-}
-
-function getMarketStatus(market) {
-  if (market.resolutionTimestamp) return "Resolved";
-  if (market.lastActiveDay > Date.now() / 1000 - 86400) return "Active";
-  return "Inactive";
-}
 ```
 
-#### Cross-Subgraph Market Analytics
-```javascript
-// Example: Get top markets with full details including names
-async function getTopMarketsWithDetails() {
-  // 1. Get market data from main subgraph
-  const marketsData = await querySubgraph(POLYMARKET_MAIN_SUBGRAPH, `
-    query {
-      fixedProductMarketMakers(first: 20, orderBy: scaledCollateralVolume, orderDirection: desc) {
-        id
-        conditions
-        scaledCollateralVolume
-        outcomeTokenPrices
-        tradesQuantity
-        lastActiveDay
-      }
-    }
-  `);
-  
-  // 2. Extract questionIDs
-  const questionIDs = marketsData.fixedProductMarketMakers
-    .map(market => market.conditions[0]);
-  
-  // 3. Get human-readable names from Names subgraph
-  const namesData = await querySubgraph(POLYMARKET_NAMES_SUBGRAPH, `
-    query($questionIDs: [Bytes!]) {
-      markets(where: { questionID_in: $questionIDs }) {
-        questionID
-        question
-        creator
-        timestamp
-      }
-    }
-  `, { questionIDs });
-  
-  // 4. Combine the data
-  return marketsData.fixedProductMarketMakers.map(market => {
-    const nameInfo = namesData.markets.find(n => 
-      n.questionID.toLowerCase() === market.conditions[0].toLowerCase()
-    );
-    
-    return {
-      ...market,
-      question: nameInfo?.question || "Unknown Market",
-      creator: nameInfo?.creator,
-      createdAt: nameInfo?.timestamp
-    };
-  });
-}
-```
+### Key Benefits of the Advanced Orderbook Subgraph Integration
 
-### Real-time Market Monitoring Dashboard
-```javascript
-// Example: Real-time dashboard with live market names
-function MarketDashboard() {
-  const [markets, setMarkets] = useState([]);
-  const [loading, setLoading] = useState(true);
-  
-  useEffect(() => {
-    async function loadMarkets() {
-      try {
-        const marketsWithNames = await getTopMarketsWithDetails();
-        setMarkets(marketsWithNames);
-      } catch (error) {
-        console.error('Failed to load markets:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    
-    loadMarkets();
-    
-    // Refresh every 5 minutes
-    const interval = setInterval(loadMarkets, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
-  
-  if (loading) return <div>Loading markets...</div>;
-  
-  return (
-    <div className="market-dashboard">
-      <h1>Top Polymarket Markets</h1>
-      <div className="market-grid">
-        {markets.map(market => (
-          <div key={market.id} className="market-card">
-            <h3>{market.question}</h3>
-            <div className="market-stats">
-              <span>Volume: {formatCurrency(market.scaledCollateralVolume)}</span>
-              <span>Probability: {formatProbability(market.outcomeTokenPrices)}</span>
-              <span>Trades: {market.tradesQuantity}</span>
-            </div>
-            <div className="market-meta">
-              <small>Created: {new Date(market.createdAt * 1000).toLocaleDateString()}</small>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-```
+- **Real-time Market Depth**: Monitor bid-ask depth and liquidity in real-time
+- **Market Microstructure Analysis**: Advanced metrics for spread analysis and order flow
+- **Trading Strategy Insights**: Price impact analysis and liquidity scoring
+- **Professional Trading Tools**: Order flow imbalance detection and market efficiency metrics
+- **Enhanced User Experience**: Complete market picture with names, prices, and depth data
+- **Cross-subgraph Analytics**: Combine fundamental data with advanced trading metrics
 
-### Multi-Subgraph Analytics Queries
-```javascript
-// Example: Comprehensive market analysis using multiple subgraphs
-async function getCompleteMarketAnalysis(questionID) {
-  const [marketDetails, pnlData, activityData, openInterest, marketName] = await Promise.all([
-    // Main market data
-    querySubgraph(POLYMARKET_MAIN_SUBGRAPH, `
-      query($condition: Bytes!) {
-        fixedProductMarketMakers(where: { conditions_contains: [$condition] }) {
-          id
-          scaledCollateralVolume
-          outcomeTokenPrices
-          tradesQuantity
-        }
-      }
-    `, { condition: questionID }),
-    
-    // PnL data
-    querySubgraph(POLYMARKET_PNL_SUBGRAPH, `
-      query($condition: Bytes!) {
-        marketPositions(where: { market_: { conditions_contains: [$condition] } }) {
-          user { id }
-          realizedProfit
-          netQuantity
-        }
-      }
-    `, { condition: questionID }),
-    
-    // Activity data  
-    querySubgraph(POLYMARKET_ACTIVITY_SUBGRAPH, `
-      query($condition: Bytes!) {
-        splitPositions(where: { condition: $condition }, first: 100, orderBy: timestamp, orderDirection: desc) {
-          user
-          amount
-          timestamp
-        }
-      }
-    `, { condition: questionID }),
-    
-    // Open interest
-    querySubgraph(POLYMARKET_OPEN_INTEREST_SUBGRAPH, `
-      query($condition: Bytes!) {
-        marketDayData(where: { market_: { conditions_contains: [$condition] } }, orderBy: date, orderDirection: desc, first: 30) {
-          date
-          volume
-          openInterest
-        }
-      }
-    `, { condition: questionID }),
-    
-    // Human-readable name
-    querySubgraph(POLYMARKET_NAMES_SUBGRAPH, `
-      query($questionID: Bytes!) {
-        markets(where: { questionID: $questionID }) {
-          question
-          creator
-          timestamp
-        }
-      }
-    `, { questionID })
-  ]);
-  
-  return {
-    question: marketName.markets[0]?.question || "Unknown Market",
-    marketDetails: marketDetails.fixedProductMarketMakers[0],
-    topTraders: pnlData.marketPositions
-      .sort((a, b) => parseFloat(b.realizedProfit) - parseFloat(a.realizedProfit))
-      .slice(0, 10),
-    recentActivity: activityData.splitPositions,
-    volumeHistory: openInterest.marketDayData,
-    creator: marketName.markets[0]?.creator,
-    createdAt: marketName.markets[0]?.timestamp
-  };
-}
-```
+### Tips for Using the Orderbook Subgraph
 
-### Key Benefits of the Names Subgraph Integration
-
-- **No External API Dependencies**: Get market titles directly from The Graph
-- **Real-time Updates**: Market names are indexed as they're created
-- **Cross-subgraph Linking**: Use questionIDs to connect data across all Polymarket subgraphs
-- **Enhanced User Experience**: Display actual market questions instead of cryptic IDs
-- **Reduced Complexity**: Single GraphQL query instead of multiple API calls
-
-### Tips for Using Multiple Subgraphs
-
-- **Batch Queries**: Use GraphQL variables to query multiple markets at once
-- **Cache Strategically**: Market names don't change once created, so cache them aggressively
-- **Handle Missing Data**: Not all questionIDs may be present in the Names subgraph
-- **Use Promise.all()**: Query multiple subgraphs in parallel for better performance
-- **Error Handling**: Implement fallbacks when subgraphs are temporarily unavailable
+- **Real-time Updates**: Query frequently for orderbook data as it changes rapidly
+- **Depth Analysis**: Use market depth queries for impact analysis before large trades
+- **Flow Monitoring**: Track order flow imbalances for potential price movement signals
+- **Spread Tracking**: Monitor spreads for market efficiency and trading cost analysis
+- **Liquidity Scoring**: Use liquidity scores to assess market quality and tradability
+- **Historical Analysis**: Combine with other subgraphs for comprehensive market research
 
 ## Contributing
 
@@ -334,3 +192,4 @@ Feel free to add more query examples or improve existing ones by submitting a pu
 - [GraphQL Documentation](https://graphql.org/learn/)
 - [Polymarket Documentation](https://docs.polymarket.com/)
 - [Polymarket Names Subgraph](https://thegraph.com/explorer/subgraphs/22CoTbEtpv6fURB6moTNfJPWNUPXtiFGRA8h1zajMha3?view=Curators&chain=arbitrum-one)
+- [Polymarket Orderbook Repository](https://github.com/PaulieB14/Polymarket-Orders)
