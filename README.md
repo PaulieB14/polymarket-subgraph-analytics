@@ -28,11 +28,10 @@ Comprehensive query examples for analyzing Polymarket data using The Graph Proto
 - **Network**: Polygon
 - **Query Examples**: [queries/polymarket-open-interest.md](queries/polymarket-open-interest.md)
 
-### 5. Polymarket Orderbook & Market Microstructure 🆕
-- **Repository**: [Polymarket-Orders](https://github.com/PaulieB14/Polymarket-Orders)
-- **Graph Studio**: [Graph Studio Link](https://api.studio.thegraph.com/query/111767/polymarket-orderbook/version/latest)
+### 5. Polymarket Orderbook 🆕 [Subgraph](https://thegraph.com/explorer/subgraphs/7fu2DWYK93ePfzB24c2wrP94S3x4LGHUrQxphhoEypyY?view=About&chain=arbitrum-one)
 - **Purpose**: **Advanced orderbook analytics and market microstructure data** - Real-time orderbook depth, bid-ask spreads, liquidity analysis, and trading flow metrics
 - **Network**: Polygon
+- **Subgraph ID**: `QmTBKKxgZwCMoa9swcHCwK29BdQ9oVaZhczUC9XJ6FLpFL`
 - **Key Features**:
   - Real-time orderbook state and depth tracking
   - Market microstructure metrics (spreads, liquidity, order flow)
@@ -73,7 +72,7 @@ You can execute these queries using:
 
 ### Enhanced Data Transformation with Human-Readable Names and Orderbook Data
 
-**NEW**: With the Polymarket Names subgraph and the advanced Orderbook & Market Microstructure subgraph, you can now build comprehensive trading dashboards with human-readable market titles and real-time market depth data!
+**NEW**: With the Polymarket Names subgraph and the advanced Orderbook subgraphs, you can now build comprehensive trading dashboards with human-readable market titles and real-time market depth data!
 
 #### Advanced Market Card with Orderbook Data
 ```javascript
